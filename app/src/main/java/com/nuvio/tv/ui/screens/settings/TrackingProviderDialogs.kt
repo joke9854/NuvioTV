@@ -287,9 +287,10 @@ internal fun TrackingDeviceAuthContent(
     onStartConnection: () -> Unit,
     onRetryPolling: () -> Unit,
     onDismiss: () -> Unit,
-    logoLabel: String? = null
+    logoLabel: String? = null,
+    logoTint: Color? = null
 ) {
-    TrackingProviderWordmark(logo, logoContentDescription, logoLabel)
+    TrackingProviderWordmark(logo, logoContentDescription, logoLabel, logoTint)
     when {
         isLoading -> {
             Row(
@@ -801,7 +802,8 @@ private fun TrackingBrandMessage(
 private fun TrackingProviderWordmark(
     logo: Painter,
     contentDescription: String,
-    label: String? = null
+    label: String? = null,
+    tint: Color? = null
 ) {
     if (label != null) {
         Row(
@@ -809,7 +811,12 @@ private fun TrackingProviderWordmark(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
         ) {
-            Image(painter = logo, contentDescription = null, modifier = Modifier.size(40.dp))
+            Image(
+                painter = logo,
+                contentDescription = null,
+                modifier = Modifier.size(40.dp),
+                colorFilter = tint?.let { androidx.compose.ui.graphics.ColorFilter.tint(it) }
+            )
             Text(label, color = NuvioTheme.colors.TextPrimary, style = MaterialTheme.typography.headlineSmall)
         }
         return

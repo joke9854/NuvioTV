@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,18 +69,21 @@ fun TrackingSettingsContent(
     traktViewModel: TraktViewModel = hiltViewModel(),
     simklViewModel: SimklSettingsViewModel = hiltViewModel(),
     mdbListViewModel: MdbListTrackerViewModel = hiltViewModel(),
+    floppyViewModel: FloppyTrackerViewModel = hiltViewModel(),
     trackingViewModel: TrackingSettingsViewModel = hiltViewModel(),
     initialFocusRequester: FocusRequester? = null
 ) {
     val traktState by traktViewModel.uiState.collectAsStateWithLifecycle()
     val simklState by simklViewModel.uiState.collectAsStateWithLifecycle()
     val mdbListState by mdbListViewModel.uiState.collectAsStateWithLifecycle()
+    val floppyState by floppyViewModel.uiState.collectAsStateWithLifecycle()
     val mdbListLibraryLists by mdbListViewModel.libraryLists.collectAsStateWithLifecycle()
     val trackingState by trackingViewModel.uiState.collectAsStateWithLifecycle()
     val ownTraktFocusRequester = remember { FocusRequester() }
     val traktFocusRequester = initialFocusRequester ?: ownTraktFocusRequester
     val simklFocusRequester = remember { FocusRequester() }
     val mdbListFocusRequester = remember { FocusRequester() }
+    val floppyFocusRequester = remember { FocusRequester() }
     val libraryFocusRequester = remember { FocusRequester() }
     val watchProgressFocusRequester = remember { FocusRequester() }
     val continueWatchingFocusRequester = remember { FocusRequester() }
@@ -109,12 +114,14 @@ fun TrackingSettingsContent(
         dismissOnConnected,
         traktState.mode,
         simklState.mode,
-        mdbListState.isConnected
+        mdbListState.isConnected,
+        floppyState.isConnected
     ) {
         val connected = when (dismissOnConnected) {
             TrackingProviderId.TRAKT -> traktState.mode == TraktConnectionMode.CONNECTED
             TrackingProviderId.SIMKL -> simklState.mode == SimklConnectionMode.CONNECTED
             TrackingProviderId.MDBLIST -> mdbListState.isConnected
+            TrackingProviderId.FLOPPY -> floppyState.isConnected
             null -> false
         }
         if (activeProvider == dismissOnConnected && connected) {
@@ -132,6 +139,7 @@ fun TrackingSettingsContent(
                 TrackingFocusTarget.TRAKT -> traktFocusRequester.requestFocus()
                 TrackingFocusTarget.SIMKL -> simklFocusRequester.requestFocus()
                 TrackingFocusTarget.MDBLIST -> mdbListFocusRequester.requestFocus()
+                TrackingFocusTarget.FLOPPY -> floppyFocusRequester.requestFocus()
                 TrackingFocusTarget.LIBRARY -> libraryFocusRequester.requestFocus()
                 TrackingFocusTarget.WATCH_PROGRESS -> watchProgressFocusRequester.requestFocus()
                 TrackingFocusTarget.CONTINUE_WATCHING -> continueWatchingFocusRequester.requestFocus()
@@ -146,6 +154,7 @@ fun TrackingSettingsContent(
             TrackingProviderId.TRAKT -> TrackingFocusTarget.TRAKT
             TrackingProviderId.SIMKL -> TrackingFocusTarget.SIMKL
             TrackingProviderId.MDBLIST -> TrackingFocusTarget.MDBLIST
+            TrackingProviderId.FLOPPY -> TrackingFocusTarget.FLOPPY
         }
         activeProvider = provider
         disconnectProvider = null
@@ -179,6 +188,10 @@ fun TrackingSettingsContent(
                     mdbListViewModel.onConnect()
                 }
             }
+            TrackingProviderId.FLOPPY -> {
+                // The server address is typed in the dialog; the device flow starts from its Connect button.
+                dismissOnConnected = if (floppyState.isConnected) null else provider
+            }
         }
     }
 
@@ -186,10 +199,12 @@ fun TrackingSettingsContent(
         traktState = traktState,
         simklState = simklState,
         mdbListState = mdbListState,
+        floppyState = floppyState,
         trackingState = trackingState,
         traktFocusRequester = traktFocusRequester,
         simklFocusRequester = simklFocusRequester,
         mdbListFocusRequester = mdbListFocusRequester,
+        floppyFocusRequester = floppyFocusRequester,
         libraryFocusRequester = libraryFocusRequester,
         watchProgressFocusRequester = watchProgressFocusRequester,
         continueWatchingFocusRequester = continueWatchingFocusRequester,
@@ -197,6 +212,7 @@ fun TrackingSettingsContent(
         onTraktClick = { openProvider(TrackingProviderId.TRAKT) },
         onSimklClick = { openProvider(TrackingProviderId.SIMKL) },
         onMdbListClick = { openProvider(TrackingProviderId.MDBLIST) },
+        onFloppyClick = { openProvider(TrackingProviderId.FLOPPY) },
         onLibrarySourceClick = {
             restoreFocusTarget = TrackingFocusTarget.LIBRARY
             showLibrarySourceDialog = true
@@ -282,6 +298,23 @@ fun TrackingSettingsContent(
                 }
             )
         }
+        TrackingProviderId.FLOPPY -> {
+            FloppyAccountDialog(
+                state = floppyState,
+                onStartConnection = floppyViewModel::onConnect,
+                onRetryPolling = floppyViewModel::onRetryPolling,
+                onDisconnect = {
+                    activeProvider = null
+                    dismissOnConnected = null
+                    disconnectProvider = TrackingProviderId.FLOPPY
+                },
+                onDismiss = {
+                    if (!floppyState.isConnected) floppyViewModel.onCancel()
+                    activeProvider = null
+                    dismissOnConnected = null
+                }
+            )
+        }
         null -> Unit
     }
 
@@ -296,6 +329,7 @@ fun TrackingSettingsContent(
                     TrackingProviderId.TRAKT -> R.string.trakt_disconnect_title
                     TrackingProviderId.SIMKL -> R.string.simkl_disconnect_title
                     TrackingProviderId.MDBLIST -> R.string.mdblist_disconnect_title
+                    TrackingProviderId.FLOPPY -> R.string.floppy_disconnect_title
                 }
             ),
             subtitle = stringResource(
@@ -303,6 +337,7 @@ fun TrackingSettingsContent(
                     TrackingProviderId.TRAKT -> R.string.trakt_disconnect_subtitle
                     TrackingProviderId.SIMKL -> R.string.simkl_disconnect_subtitle
                     TrackingProviderId.MDBLIST -> R.string.mdblist_disconnect_subtitle
+                    TrackingProviderId.FLOPPY -> R.string.floppy_disconnect_subtitle
                 }
             ),
             width = 520.dp,
@@ -324,6 +359,7 @@ fun TrackingSettingsContent(
                             TrackingProviderId.TRAKT -> traktViewModel.onDisconnectClick()
                             TrackingProviderId.SIMKL -> simklViewModel.onDisconnect()
                             TrackingProviderId.MDBLIST -> mdbListViewModel.onDisconnect()
+                            TrackingProviderId.FLOPPY -> floppyViewModel.onDisconnect()
                         }
                     },
                     primary = true
@@ -491,12 +527,16 @@ internal fun TrackingSettingsOverview(
     onMoreLikeThisClick: () -> Unit,
     onAnimeIdClick: () -> Unit,
     mdbListLibraryLists: MdbListLibraryListsUiState = MdbListLibraryListsUiState(),
-    onMdbListLibraryListsClick: () -> Unit = {}
+    onMdbListLibraryListsClick: () -> Unit = {},
+    floppyState: FloppyTrackerUiState = FloppyTrackerUiState(),
+    floppyFocusRequester: FocusRequester = remember { FocusRequester() },
+    onFloppyClick: () -> Unit = {}
 ) {
     val listState = rememberLazyListState()
     val traktPresentation = traktConnectionPresentation(traktState)
     val simklPresentation = simklConnectionPresentation(simklState)
     val mdbListPresentation = mdbListConnectionPresentation(mdbListState)
+    val floppyPresentation = floppyConnectionPresentation(floppyState)
     val traktConnected = traktState.mode == TraktConnectionMode.CONNECTED
     val traktProgressActive = trackingState.watchProgressSource == WatchProgressSource.TRAKT
 
@@ -557,6 +597,18 @@ internal fun TrackingSettingsOverview(
                             modifier = Modifier
                                 .focusRequester(mdbListFocusRequester)
                                 .testTag(TrackingSettingsTestTags.MDBLIST_PROVIDER)
+                        )
+                        SettingsActionRow(
+                            title = stringResource(R.string.floppy_name),
+                            subtitle = floppyPresentation.subtitle,
+                            value = floppyPresentation.value,
+                            valueColor = floppyPresentation.color,
+                            leadingIcon = Icons.Default.Dns,
+                            leadingArtworkSize = 40.dp,
+                            onClick = onFloppyClick,
+                            modifier = Modifier
+                                .focusRequester(floppyFocusRequester)
+                                .testTag(TrackingSettingsTestTags.FLOPPY_PROVIDER)
                         )
                     }
                 }
@@ -757,6 +809,26 @@ private fun mdbListConnectionPresentation(state: MdbListTrackerUiState): Trackin
 }
 
 @Composable
+private fun floppyConnectionPresentation(state: FloppyTrackerUiState): TrackingConnectionPresentation = when {
+    state.isLoading && !state.isConnected -> TrackingConnectionPresentation(
+        stringResource(R.string.tracking_connecting_provider, stringResource(R.string.floppy_name)),
+        stringResource(R.string.tracking_status_connecting), NuvioTheme.colors.Info
+    )
+    state.isConnected -> TrackingConnectionPresentation(
+        stringResource(R.string.floppy_connected_to, state.serverHost.orEmpty()),
+        stringResource(R.string.tracking_status_connected), NuvioTheme.colors.Success
+    )
+    state.session != null -> TrackingConnectionPresentation(
+        state.errorMessage ?: stringResource(R.string.tracking_finish_connection),
+        stringResource(R.string.tracking_status_waiting), NuvioTheme.colors.Warning
+    )
+    else -> TrackingConnectionPresentation(
+        state.errorMessage ?: stringResource(R.string.floppy_tracking_description),
+        stringResource(R.string.tracking_status_disconnected), NuvioTheme.colors.TextSecondary
+    )
+}
+
+@Composable
 private fun watchProgressSourceLabel(source: WatchProgressSource): String = when (source) {
     WatchProgressSource.TRAKT -> stringResource(R.string.trakt_name)
     WatchProgressSource.SIMKL -> stringResource(R.string.simkl_name)
@@ -800,6 +872,7 @@ private enum class TrackingFocusTarget {
     TRAKT,
     SIMKL,
     MDBLIST,
+    FLOPPY,
     LIBRARY,
     WATCH_PROGRESS,
     CONTINUE_WATCHING,
@@ -811,6 +884,7 @@ internal object TrackingSettingsTestTags {
     const val TRAKT_PROVIDER = "tracking_provider_trakt"
     const val SIMKL_PROVIDER = "tracking_provider_simkl"
     const val MDBLIST_PROVIDER = "tracking_provider_mdblist"
+    const val FLOPPY_PROVIDER = "tracking_provider_floppy"
     const val MDBLIST_LIBRARY_LISTS = "tracking_mdblist_library_lists"
     const val LIBRARY_SOURCE = "tracking_source_library"
     const val WATCH_PROGRESS_SOURCE = "tracking_source_watch_progress"
