@@ -2,12 +2,15 @@ package com.nuvio.tv.core.di
 
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.network.NoDelaySocketFactory
+import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.profile.ProfileScopedCredentialStore
 import com.nuvio.tv.data.floppy.AndroidFloppyAuthPersistence
 import com.nuvio.tv.data.floppy.FloppyApiClient
 import com.nuvio.tv.data.floppy.FloppyAuthRepository
 import com.nuvio.tv.data.floppy.FloppyAuthStore
+import com.nuvio.tv.data.floppy.AndroidFloppySyncStorage
 import com.nuvio.tv.data.floppy.FloppyHttpClient
+import com.nuvio.tv.data.floppy.FloppySyncRepository
 import com.nuvio.tv.data.floppy.OkHttpFloppyEngine
 import com.nuvio.tv.data.local.ProfileDataStore
 import dagger.Module
@@ -61,4 +64,16 @@ object FloppyModule {
     @Provides
     @Singleton
     fun api(http: FloppyHttpClient, auth: FloppyAuthRepository) = FloppyApiClient(http, auth)
+
+    @Provides
+    @Singleton
+    fun syncRepository(
+        storage: AndroidFloppySyncStorage,
+        store: FloppyAuthStore,
+        api: FloppyApiClient,
+        profiles: ProfileManager
+    ) = FloppySyncRepository(
+        storage, store, api, profiles.activeProfileId,
+        CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    )
 }

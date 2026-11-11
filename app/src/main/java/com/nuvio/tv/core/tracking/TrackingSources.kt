@@ -8,6 +8,7 @@ val WatchProgressSource.providerId: TrackingProviderId?
         WatchProgressSource.TRAKT -> TrackingProviderId.TRAKT
         WatchProgressSource.SIMKL -> TrackingProviderId.SIMKL
         WatchProgressSource.MDBLIST -> TrackingProviderId.MDBLIST
+        WatchProgressSource.FLOPPY -> TrackingProviderId.FLOPPY
         WatchProgressSource.NUVIO_SYNC -> null
     }
 
@@ -61,6 +62,7 @@ fun availableWatchProgressSources(
     if (TrackingProviderId.TRAKT in connectedProviderIds) add(WatchProgressSource.TRAKT)
     if (TrackingProviderId.SIMKL in connectedProviderIds) add(WatchProgressSource.SIMKL)
     if (TrackingProviderId.MDBLIST in connectedProviderIds) add(WatchProgressSource.MDBLIST)
+    if (TrackingProviderId.FLOPPY in connectedProviderIds) add(WatchProgressSource.FLOPPY)
 }
 
 fun availableLibrarySourceModes(

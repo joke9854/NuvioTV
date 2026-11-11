@@ -833,6 +833,7 @@ private fun watchProgressSourceLabel(source: WatchProgressSource): String = when
     WatchProgressSource.TRAKT -> stringResource(R.string.trakt_name)
     WatchProgressSource.SIMKL -> stringResource(R.string.simkl_name)
     WatchProgressSource.MDBLIST -> stringResource(R.string.mdblist_name)
+    WatchProgressSource.FLOPPY -> stringResource(R.string.floppy_name)
     WatchProgressSource.NUVIO_SYNC -> stringResource(R.string.trakt_watch_progress_source_nuvio)
 }
 

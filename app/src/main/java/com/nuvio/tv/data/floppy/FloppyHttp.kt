@@ -33,7 +33,7 @@ sealed class FloppyApiError(message: String, cause: Throwable? = null) : Excepti
     class Rejected(val status: Int) : FloppyApiError("Floppy rejected the request (HTTP $status)")
 }
 
-enum class FloppyHttpMethod { GET, POST }
+enum class FloppyHttpMethod { GET, POST, DELETE }
 
 /** [url] is absolute. [bearer] is only attached when the URL is on the configured server's origin. */
 class FloppyHttpRequest(
@@ -138,6 +138,7 @@ class OkHttpFloppyEngine(client: OkHttpClient, private val appVersion: String) :
                 bearer?.let { header("Authorization", "Bearer $it") }
                 when (request.method) {
                     FloppyHttpMethod.GET -> get()
+                    FloppyHttpMethod.DELETE -> delete((request.json ?: "{}").toRequestBody("application/json".toMediaType()))
                     FloppyHttpMethod.POST -> post(
                         request.form?.let { fields ->
                             FormBody.Builder().apply { fields.forEach { (key, value) -> add(key, value) } }.build()

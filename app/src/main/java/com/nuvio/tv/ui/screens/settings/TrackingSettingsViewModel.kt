@@ -15,6 +15,7 @@ import com.nuvio.tv.data.local.WatchProgressSource
 import com.nuvio.tv.data.simkl.SimklAnimeIdPreference
 import com.nuvio.tv.data.simkl.SimklAuthRepository
 import com.nuvio.tv.data.simkl.SimklSyncRepository
+import com.nuvio.tv.data.floppy.FloppyAuthStore
 import com.nuvio.tv.data.mdblist.MdbListAuthStore
 import com.nuvio.tv.domain.model.LibrarySourceMode
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -48,6 +49,7 @@ class TrackingSettingsViewModel @Inject constructor(
     traktAuthDataStore: TraktAuthDataStore,
     simklAuthRepository: SimklAuthRepository,
     mdbListAuth: MdbListAuthStore,
+    floppyAuth: FloppyAuthStore,
     profiles: ProfileManager
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(TrackingSettingsUiState())
@@ -55,11 +57,14 @@ class TrackingSettingsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val connected = combine(traktAuthDataStore.state, simklAuthRepository.state, mdbListAuth.state, profiles.activeProfileId) { trakt, simkl, mdblist, profileId ->
-                if (mdblist.scope.profileId != profileId) null else buildSet<TrackingProviderId> {
+            val connected = combine(
+                traktAuthDataStore.state, simklAuthRepository.state, mdbListAuth.state, floppyAuth.state, profiles.activeProfileId
+            ) { trakt, simkl, mdblist, floppy, profileId ->
+                if (mdblist.scope.profileId != profileId || floppy.scope.profileId != profileId) null else buildSet<TrackingProviderId> {
                     if (trakt.isAuthenticated) add(TrackingProviderId.TRAKT)
                     if (simkl.isAuthenticated) add(TrackingProviderId.SIMKL)
                     if (mdblist.isAuthenticated) add(TrackingProviderId.MDBLIST)
+                    if (floppy.isAuthenticated) add(TrackingProviderId.FLOPPY)
                 }
             }
             combine(

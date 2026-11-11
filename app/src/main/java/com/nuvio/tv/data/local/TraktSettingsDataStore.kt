@@ -26,6 +26,7 @@ enum class WatchProgressSource {
     TRAKT,
     SIMKL,
     MDBLIST,
+    FLOPPY,
     NUVIO_SYNC;
 
     companion object {

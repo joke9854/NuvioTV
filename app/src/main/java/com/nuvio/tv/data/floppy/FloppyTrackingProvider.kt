@@ -51,7 +51,14 @@ class FloppyTrackingProvider @Inject constructor(
     override val descriptor = TrackingProviderDescriptor(
         TrackingProviderId.FLOPPY,
         "Floppy",
-        setOf(TrackingCapability.AUTHENTICATION, TrackingCapability.WATCHED_WRITE, TrackingCapability.SCROBBLE)
+        setOf(
+            TrackingCapability.AUTHENTICATION,
+            TrackingCapability.WATCHED_READ,
+            TrackingCapability.WATCHED_WRITE,
+            TrackingCapability.PROGRESS_READ,
+            TrackingCapability.PROGRESS_WRITE,
+            TrackingCapability.SCROBBLE
+        )
     )
     override val isAuthenticated = combine(auth.state, profiles.activeProfileId) { authorization, profileId ->
         authorization.isAuthenticated && authorization.scope.profileId == profileId

@@ -29,6 +29,33 @@ class TrackingSourcesTest {
     }
 
     @Test
+    fun `Floppy is a watch progress source only while it is connected`() {
+        assertEquals(WatchProgressSource.FLOPPY, WatchProgressSource.fromStorage("FLOPPY"))
+        assertEquals(TrackingProviderId.FLOPPY, WatchProgressSource.FLOPPY.providerId)
+        assertEquals(
+            listOf(WatchProgressSource.NUVIO_SYNC, WatchProgressSource.TRAKT, WatchProgressSource.FLOPPY),
+            availableWatchProgressSources(setOf(TrackingProviderId.TRAKT, TrackingProviderId.FLOPPY))
+        )
+        assertEquals(
+            listOf(WatchProgressSource.NUVIO_SYNC),
+            availableWatchProgressSources(emptySet())
+        )
+        // Floppy is not a library source yet.
+        assertEquals(
+            listOf(LibrarySourceMode.LOCAL),
+            availableLibrarySourceModes(setOf(TrackingProviderId.FLOPPY))
+        )
+        assertEquals(
+            WatchProgressSource.FLOPPY,
+            effectiveWatchProgressSource(WatchProgressSource.FLOPPY) { it == TrackingProviderId.FLOPPY }
+        )
+        assertEquals(
+            WatchProgressSource.NUVIO_SYNC,
+            effectiveWatchProgressSource(WatchProgressSource.FLOPPY) { false }
+        )
+    }
+
+    @Test
     fun `legacy source names retain their stored meaning`() {
         assertEquals(WatchProgressSource.TRAKT, WatchProgressSource.fromStorage("TRAKT"))
         assertEquals(WatchProgressSource.NUVIO_SYNC, WatchProgressSource.fromStorage("NUVIO_SYNC"))

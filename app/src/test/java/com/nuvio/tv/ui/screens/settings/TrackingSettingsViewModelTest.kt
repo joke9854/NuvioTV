@@ -5,6 +5,8 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.tracking.TrackingProviderId
 import com.nuvio.tv.core.tracking.TrackingSourceController
 import com.nuvio.tv.core.tracking.TrackingSourceSelection
+import com.nuvio.tv.data.floppy.FloppyAuthStore
+import com.nuvio.tv.data.floppy.FloppyTestPersistence
 import com.nuvio.tv.data.local.TraktAuthDataStore
 import com.nuvio.tv.data.local.TraktAuthState
 import com.nuvio.tv.data.local.TraktSettingsDataStore
@@ -39,6 +41,7 @@ class TrackingSettingsViewModelTest {
         harness.connected()
         harness.store.selectProfile(1)
         harness.connected()
+        val floppy = FloppyAuthStore(FloppyTestPersistence())
         val activeProfile = MutableStateFlow(1)
         val profiles = mockk<ProfileManager> { every { activeProfileId } returns activeProfile }
         val reconciliations = mutableListOf<Set<TrackingProviderId>>()
@@ -55,7 +58,7 @@ class TrackingSettingsViewModelTest {
         }
         val trakt = mockk<TraktAuthDataStore> { every { state } returns flowOf(TraktAuthState()) }
         val simkl = mockk<SimklAuthRepository> { every { state } returns MutableStateFlow(SimklAuthState()) }
-        val viewModel = TrackingSettingsViewModel(controller, settings, mockk(), trakt, simkl, harness.store, profiles)
+        val viewModel = TrackingSettingsViewModel(controller, settings, mockk(), trakt, simkl, harness.store, floppy, profiles)
         runCurrent()
         assertEquals(setOf(TrackingProviderId.MDBLIST), viewModel.uiState.value.connectedProviderIds)
         val previousCount = reconciliations.size
@@ -64,6 +67,7 @@ class TrackingSettingsViewModelTest {
         assertFalse(viewModel.uiState.value.isReady)
         assertEquals(previousCount, reconciliations.size)
         harness.store.selectProfile(2)
+        floppy.selectProfile(2)
         runCurrent()
         assertTrue(viewModel.uiState.value.isReady)
         assertEquals(WatchProgressSource.MDBLIST, viewModel.uiState.value.watchProgressSource)
