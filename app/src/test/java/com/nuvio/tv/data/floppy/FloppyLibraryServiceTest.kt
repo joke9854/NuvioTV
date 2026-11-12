@@ -56,8 +56,8 @@ class FloppyLibraryServiceTest {
         var items: List<String> = emptyList()
         var removeCapable = true
         var statusResponse: (RecordedFloppyRequest) -> FloppyHttpResponse = { request ->
-            val label = if (request.body.containsKey("movies")) "movies" else "shows"
-            FloppyHttpResponse(200, """{"$label":[{"outcome":"updated"}]}""")
+            val type = if (request.body.containsKey("movies")) "movie" else "show"
+            FloppyHttpResponse(200, """{"results":[{"type":"$type","source":"tmdb","media_id":"1","outcome":"updated"}],"counts":{"updated":1}}""")
         }
         val authenticated = MutableStateFlow(true)
 
@@ -195,7 +195,7 @@ class FloppyLibraryServiceTest {
         )
         f.sync()
         val posters = f.service.items.first().associate { it.id to it.poster }
-        assertEquals("https://image.tmdb.org/t/p/w500/a.jpg", posters["tt40"])
+        assertEquals("https://image.tmdb.org/t/p/w342/a.jpg", posters["tt40"])
         assertEquals(null, posters["tt41"])
         assertEquals(null, posters["tt42"])
     }
@@ -241,7 +241,7 @@ class FloppyLibraryServiceTest {
         val f = fixture()
         f.items = listOf(libraryItem("movie", "50", "planning", ids = """{"imdb":"tt50"}"""))
         f.sync()
-        f.statusResponse = { FloppyHttpResponse(200, """{"movies":[{"outcome":"removed"}]}""") }
+        f.statusResponse = { FloppyHttpResponse(200, """{"results":[{"type":"movie","outcome":"removed","removed_count":1}],"counts":{"removed":1}}""") }
 
         f.service.applyMembershipChanges(movie("tt50"), desire(null))
 
@@ -270,7 +270,7 @@ class FloppyLibraryServiceTest {
         val f = fixture()
         f.items = listOf(libraryItem("show", "60", "in_progress", ids = """{"imdb":"tt60"}"""))
         f.sync()
-        f.statusResponse = { FloppyHttpResponse(200, """{"shows":[{"outcome":"conflict","reason":"has_history"}]}""") }
+        f.statusResponse = { FloppyHttpResponse(200, """{"results":[{"type":"show","outcome":"conflict","reason":"has_history"}]}""") }
 
         val error = expectFloppyFailure<FloppyLibraryHistoryConflictException> {
             f.service.applyMembershipChanges(show("tt60"), desire(null))
@@ -286,7 +286,7 @@ class FloppyLibraryServiceTest {
         val f = fixture()
         f.items = listOf(libraryItem("movie", "70", "planning", ids = """{"imdb":"tt70"}"""))
         f.sync()
-        f.statusResponse = { FloppyHttpResponse(200, """{"movies":[{"outcome":"failed","reason":"provider_unavailable"}]}""") }
+        f.statusResponse = { FloppyHttpResponse(200, """{"results":[{"type":"movie","outcome":"failed","reason":"provider_unavailable"}]}""") }
         expectFloppyFailure<FloppyLibraryWriteException> {
             f.service.applyMembershipChanges(movie("tt70"), desire("floppy:status:dropped"))
         }

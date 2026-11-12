@@ -184,10 +184,17 @@ private fun FloppyLibraryRow.toLibraryEntry(): LibraryEntry {
     )
 }
 
-/** A usable poster URL: http(s) only, anything else (blank, a relative path) is dropped. */
+/**
+ * A poster for a Library card: http(s) only, anything else (blank, a relative path) is dropped.
+ * Floppy stores TMDB posters at w500; a card needs w342, about half the bytes, so larger TMDB sizes
+ * are asked for at w342.
+ */
 internal fun floppyPosterUrl(value: String?): String? = value?.trim()?.takeIf {
     it.startsWith("https://", ignoreCase = true) || it.startsWith("http://", ignoreCase = true)
-}
+}?.replace(TMDB_LARGE_POSTER, "$1$FLOPPY_CARD_POSTER_SIZE/")
+
+private const val FLOPPY_CARD_POSTER_SIZE = "w342"
+private val TMDB_LARGE_POSTER = Regex("^(https?://image\\.tmdb\\.org/t/p/)(?:w500|w780|original)/", RegexOption.IGNORE_CASE)
 
 /** Floppy refused to remove a title because it has watch history. Floppy never deletes history. */
 class FloppyLibraryHistoryConflictException : IllegalStateException(
@@ -302,7 +309,7 @@ class FloppyLibraryService internal constructor(
         val label = if (type == "movie") "movies" else "shows"
         val response = api.post(scope, "/api/v1/sync/status/", buildJsonObject { put(label, JsonArray(listOf(entry))) })
         val result = runCatching {
-            json.parseToJsonElement(response.body).jsonObject[label]?.jsonArray?.firstOrNull() as? JsonObject
+            json.parseToJsonElement(response.body).jsonObject["results"]?.jsonArray?.firstOrNull() as? JsonObject
         }.getOrNull() ?: throw FloppyApiError.InvalidResponse()
         val outcome = result["outcome"]?.jsonPrimitive?.contentOrNull
         val reason = result["reason"]?.jsonPrimitive?.contentOrNull
