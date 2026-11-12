@@ -1230,8 +1230,9 @@ internal fun PlayerRuntimeController.emitSeekScrobbleRestart(progressPercent: Fl
     val item = currentScrobbleItem ?: return
     if (!hasRequestedScrobbleStartForCurrentItem) return
     // Position-update providers hear about every seek while playing, past 80% too: a START never marks watched.
+    // Play intent, not isPlaying: right after a seek the stream buffers and ExoPlayer reports not playing.
     scope.launch {
-        if (isPlaybackCurrentlyPlaying()) {
+        if (hasActivePlayIntent()) {
             trackingScrobbleCoordinator.scrobblePositionUpdate(
                 playbackScrobbleEvent(item, currentPlaybackProgressPercent().toDouble())
             )

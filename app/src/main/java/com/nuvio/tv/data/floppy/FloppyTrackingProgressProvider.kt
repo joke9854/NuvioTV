@@ -10,7 +10,13 @@ import com.nuvio.tv.domain.model.WatchProgress
 import com.nuvio.tv.domain.model.WatchedItem
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
@@ -41,7 +47,14 @@ class FloppyTrackingProgressProvider @Inject constructor(
             state.scope == authorization.scope) state.projection else FloppyProgressProjection.Empty
     }.distinctUntilChanged()
 
-    override val allProgress: Flow<List<WatchProgress>> = projection.map { it.progress }.loadOnStart()
+    /** Positions saved here that Floppy has not returned yet; see [FloppyOptimisticProgress]. */
+    private val optimistic = FloppyOptimisticProgress()
+    private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var pendingRefresh: Job? = null
+
+    override val allProgress: Flow<List<WatchProgress>> =
+        combine(projection, optimistic.changes) { projection, _ -> optimistic.merge(projection.progress) }
+            .loadOnStart()
     override val watchedItems: Flow<List<WatchedItem>> = projection.map { it.watchedItems }.loadOnStart()
     override val watchedMovieIds: Flow<Set<String>> = projection.map { it.watchedMovieIds }.loadOnStart()
     override val nextUpSeeds: Flow<List<WatchProgress>> =
@@ -59,7 +72,9 @@ class FloppyTrackingProgressProvider @Inject constructor(
     override val clearsLocalProgressOnSelection: Boolean = false
 
     override fun episodeProgress(contentId: String): Flow<Map<Pair<Int, Int>, WatchProgress>> =
-        projection.map { it.episodeProgress(contentId) }.loadOnStart()
+        combine(projection, optimistic.changes) { projection, _ ->
+            optimistic.mergeEpisodes(contentId, projection.episodeProgress(contentId))
+        }.loadOnStart()
 
     override fun airedEpisodeOrder(contentId: String): Flow<List<Pair<Int, Int>>> = flowOf(emptyList())
 
@@ -91,9 +106,27 @@ class FloppyTrackingProgressProvider @Inject constructor(
     override suspend fun removeProgress(contentId: String, season: Int?, episode: Int?) =
         sync.clearPlayback(contentId, season, episode)
 
-    override fun applyOptimisticProgress(progress: WatchProgress, quiet: Boolean) = Unit
-    override fun applyOptimisticRemoval(contentId: String, season: Int?, episode: Int?) = Unit
-    override fun clearOptimistic() = Unit
+    override fun applyOptimisticProgress(progress: WatchProgress, quiet: Boolean) {
+        optimistic.put(progress)
+        if (!quiet) refreshSoon()
+    }
+
+    override fun applyOptimisticRemoval(contentId: String, season: Int?, episode: Int?) =
+        optimistic.remove(contentId, season, episode)
+
+    override fun clearOptimistic() = optimistic.clear()
+
+    /**
+     * Re-reads Floppy shortly after a save, past the automatic 15-minute throttle, so the server's copy
+     * (stored by the scrobble that goes out at the same time) replaces the optimistic one.
+     */
+    private fun refreshSoon() {
+        pendingRefresh?.cancel()
+        pendingRefresh = refreshScope.launch {
+            delay(REFRESH_AFTER_SAVE_MS)
+            runCatching { sync.refresh(TrackingRefreshIntent.INVALIDATED) }
+        }
+    }
     override fun isHiddenFromProgress(contentId: String): Boolean = sync.currentProjection().isHidden(contentId)
 
     override suspend fun prepareNextUpSeed(progress: WatchProgress): WatchProgress = progress
@@ -109,4 +142,8 @@ class FloppyTrackingProgressProvider @Inject constructor(
         sync.ensureLoaded()
         sync.refreshAsync(TrackingRefreshIntent.AUTOMATIC)
     }.distinctUntilChanged()
+
+    private companion object {
+        const val REFRESH_AFTER_SAVE_MS = 4_000L
+    }
 }
