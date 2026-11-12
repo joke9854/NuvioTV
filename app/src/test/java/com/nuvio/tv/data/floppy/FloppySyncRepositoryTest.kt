@@ -76,6 +76,8 @@ class FloppySyncRepositoryTest {
         var changes: (Long) -> FloppyHttpResponse = { FloppyHttpResponse(200, """{"results":[],"cursor":$it,"has_more":false}""") }
         var playback = """{"pagination":{"next":null},"results":[]}"""
         var deleteStatus = 204
+        var translateCapable = true
+        var translate: (RecordedFloppyRequest) -> FloppyHttpResponse = { FloppyHttpResponse(404, "") }
 
         init {
             h.engine.handler = { request ->
@@ -86,6 +88,9 @@ class FloppySyncRepositoryTest {
                     path.startsWith("/api/v1/sync/items/snapshot/") ->
                         FloppyHttpResponse(200, snapshotPages(query(path, "after")))
                     path.startsWith("/api/v1/sync/items/changes/") -> changes(query(path, "cursor"))
+                    path == "/api/v1/info/" ->
+                        FloppyHttpResponse(200, "{\"api_extensions\":{\"cinetrack_episode_translate_v1\":$translateCapable}}")
+                    path.endsWith("/episodes/translate/") -> translate(request)
                     path.startsWith("/api/v1/playback/progress/") && request.request.method == FloppyHttpMethod.GET ->
                         FloppyHttpResponse(200, playback)
                     path.startsWith("/api/v1/playback/progress/") -> FloppyHttpResponse(deleteStatus, "")
@@ -498,5 +503,114 @@ class FloppySyncRepositoryTest {
         assertTrue(restarted.currentSnapshot()!!.items.isEmpty())
         assertNull(restarted.currentSnapshot()!!.cursor)
         assertNull(restarted.currentSnapshot()!!.connection)
+    }
+
+    private fun translated(vararg rows: String) =
+        FloppyHttpResponse(200, """{"results":[${rows.joinToString(",")}]}""")
+
+    private fun translatedRow(season: Int, episode: Int, tvdbSeason: Int, tvdbEpisode: Int) =
+        """{"season":$season,"episode":$episode,"status":"translated","tmdb":null,"absolute":null,""" +
+            """"tvdb":{"season":$tvdbSeason,"episode":$tvdbEpisode},"reason":null}"""
+
+    private fun anime(f: Fixture) {
+        f.snapshotPages = {
+            """{"results":[
+                ${itemJson("show", "1", ids = """{"imdb":"tt100","tmdb":"1"}""")},
+                ${itemJson("episode", "1", season = 2, episode = 3, plays = listOf(play(T1)))}
+            ],"next_after":null,"cursor":10}"""
+        }
+    }
+
+    @Test
+    fun `episodes of an imdb show are projected with the tracker numbers the server returns`() = runTest {
+        val f = fixture()
+        anime(f)
+        f.translate = { translated(translatedRow(2, 3, 1, 27)) }
+        val repo = f.repository(background = backgroundScope)
+        repo.sync()
+
+        val request = f.requests("/api/v1/media/tv/tmdb/1/episodes/translate/").single()
+        assertEquals("tmdb", request.body["from"]!!.jsonPrimitive.content)
+        assertEquals(2, request.body["episodes"]!!.jsonArray[0].jsonObject["season"]!!.jsonPrimitive.content.toInt())
+        val projection = repo.currentProjection()
+        assertEquals(setOf(1 to 27), projection.watchedShowEpisodes["tt100"])
+        // The tmdb alias keeps Floppy's own numbers.
+        assertEquals(setOf(2 to 3), projection.watchedShowEpisodes["tmdb:1"])
+        assertEquals(1, projection.watchedItems.single().season)
+        assertEquals(27, projection.watchedItems.single().episode)
+        assertEquals(1 to 27, repo.currentSnapshot()!!.trackerEpisodes.values.single().let { it.season to it.episode })
+
+        // Already known: the next sync asks nothing more.
+        repo.sync()
+        assertEquals(1, f.requests("/api/v1/media/tv/tmdb/1/episodes/translate/").size)
+    }
+
+    @Test
+    fun `a failed translate keeps the tmdb numbers and still commits the cursor`() = runTest {
+        val f = fixture()
+        anime(f)
+        f.translate = { FloppyHttpResponse(404, "") }
+        val repo = f.repository(background = backgroundScope)
+        repo.sync()
+
+        assertEquals(10L, repo.currentSnapshot()!!.cursor)
+        assertNull(repo.state.value.error)
+        assertEquals(setOf(2 to 3), repo.currentProjection().watchedShowEpisodes["tt100"])
+        assertTrue(repo.currentSnapshot()!!.trackerEpisodes.isEmpty())
+        assertEquals(10L, json.decodeFromString<FloppySyncSnapshot>(f.storage.payloads[1]!!).cursor)
+    }
+
+    @Test
+    fun `without the capability flag nothing is translated`() = runTest {
+        val f = fixture()
+        anime(f)
+        f.translateCapable = false
+        val repo = f.repository(background = backgroundScope)
+        repo.sync()
+
+        assertTrue(f.requests("/api/v1/media/tv/").isEmpty())
+        assertEquals(setOf(2 to 3), repo.currentProjection().watchedShowEpisodes["tt100"])
+    }
+
+    @Test
+    fun `tmdb shows are never translated`() = runTest {
+        val f = fixture()
+        f.snapshotPages = {
+            """{"results":[
+                ${itemJson("show", "5", ids = """{"tmdb":"5"}""")},
+                ${itemJson("episode", "5", season = 2, episode = 3, plays = listOf(play(T1)))}
+            ],"next_after":null,"cursor":10}"""
+        }
+        val repo = f.repository(background = backgroundScope)
+        repo.sync()
+        assertTrue(f.requests("/api/v1/media/tv/").isEmpty())
+        assertEquals(setOf(2 to 3), repo.currentProjection().watchedShowEpisodes["tmdb:5"])
+    }
+
+    @Test
+    fun `resume positions of an imdb show are projected with tracker numbers`() = runTest {
+        val f = fixture()
+        f.snapshotPages = {
+            """{"results":[${itemJson("show", "1", ids = """{"imdb":"tt100","tmdb":"1"}""")}],"next_after":null,"cursor":10}"""
+        }
+        f.playback = """{"pagination":{"next":null},"results":[
+            {"media_type":"episode","source":"tmdb","media_id":"1","season_number":2,"episode_number":3,"ids":{},
+             "title":"E","series_title":"S","position_seconds":60,"duration_seconds":600,"completed":false,"updated_at":"$T1"}
+        ]}"""
+        f.translate = { translated(translatedRow(2, 3, 1, 27)) }
+        val repo = f.repository(background = backgroundScope)
+        repo.sync()
+        val progress = repo.currentProjection().progress.single()
+        assertEquals("tt100", progress.contentId)
+        assertEquals(1, progress.season)
+        assertEquals(27, progress.episode)
+    }
+
+    @Test
+    fun `a snapshot stored before tracker numbers existed still decodes`() {
+        val old = """{"serverUrl":"https://floppy.example.com","connection":"c","cursor":4,"items":[],"playback":[],"checkedAtEpochMs":1}"""
+        val snapshot = json.decodeFromString<FloppySyncSnapshot>(old)
+        assertEquals(4L, snapshot.cursor)
+        assertTrue(snapshot.trackerEpisodes.isEmpty())
     }
 }

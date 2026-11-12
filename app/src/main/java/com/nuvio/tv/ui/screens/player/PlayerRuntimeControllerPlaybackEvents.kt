@@ -1111,7 +1111,7 @@ internal fun PlayerRuntimeController.emitScrobbleStart() {
         logScrobbleDiagnostic("start_dispatching", "requestGeneration=$requestGeneration progress=$progressPercent")
         val failures = trackingScrobbleCoordinator.scrobble(
             action = TrackingScrobbleAction.START,
-            event = TrackingScrobbleEvent(item, progressPercent.toDouble())
+            event = playbackScrobbleEvent(item, progressPercent.toDouble())
         )
         logScrobbleDiagnostic(
             "start_dispatched",
@@ -1146,11 +1146,13 @@ internal fun PlayerRuntimeController.emitScrobbleStop(progressPercent: Float? = 
 
     val percent = provided ?: currentPlaybackProgressPercent()
     logScrobbleDiagnostic("stop_queued", "progress=$percent")
+    // Read the position now: on exit the player is released before the coroutine runs.
+    val event = playbackScrobbleEvent(item, percent.toDouble())
     scope.launch(kotlinx.coroutines.NonCancellable) {
         logScrobbleDiagnostic("stop_dispatching", "progress=$percent")
         val failures = trackingScrobbleCoordinator.scrobble(
             action = TrackingScrobbleAction.STOP,
-            event = TrackingScrobbleEvent(item, percent.toDouble())
+            event = event
         )
         logScrobbleDiagnostic("stop_dispatched", "progress=$percent failures=${failures.map { it.providerId.storageId }}")
     }
@@ -1181,11 +1183,13 @@ internal fun PlayerRuntimeController.emitScrobblePause(progressPercent: Float? =
         return
     }
     logScrobbleDiagnostic("pause_queued", "progress=$percent")
+    // Read the position now: on exit the player is released before the coroutine runs.
+    val event = playbackScrobbleEvent(item, percent.toDouble())
     scope.launch(kotlinx.coroutines.NonCancellable) {
         logScrobbleDiagnostic("pause_dispatching", "progress=$percent")
         val failures = trackingScrobbleCoordinator.scrobble(
             action = TrackingScrobbleAction.PAUSE,
-            event = TrackingScrobbleEvent(item, percent.toDouble())
+            event = event
         )
         logScrobbleDiagnostic("pause_dispatched", "progress=$percent failures=${failures.map { it.providerId.storageId }}")
     }
@@ -1222,22 +1226,46 @@ internal fun PlayerRuntimeController.emitPauseScrobbleForCurrentProgress() {
 }
 
 internal fun PlayerRuntimeController.emitSeekScrobbleRestart(progressPercent: Float) {
-    if (progressPercent < 1f || progressPercent >= 80f) return
     if (isShortPlaceholderStream()) return
     val item = currentScrobbleItem ?: return
     if (!hasRequestedScrobbleStartForCurrentItem) return
+    // Position-update providers hear about every seek while playing, past 80% too: a START never marks watched.
+    scope.launch {
+        if (isPlaybackCurrentlyPlaying()) {
+            trackingScrobbleCoordinator.scrobblePositionUpdate(
+                playbackScrobbleEvent(item, currentPlaybackProgressPercent().toDouble())
+            )
+        }
+    }
+    if (progressPercent < 1f || progressPercent >= 80f) return
+    val stopEvent = playbackScrobbleEvent(item, progressPercent.toDouble())
     scope.launch {
         trackingScrobbleCoordinator.scrobbleSeek(
             action = TrackingScrobbleAction.STOP,
-            event = TrackingScrobbleEvent(item, progressPercent.toDouble())
+            event = stopEvent
         )
         if (isPlaybackCurrentlyPlaying()) {
             trackingScrobbleCoordinator.scrobbleSeek(
                 action = TrackingScrobbleAction.START,
-                event = TrackingScrobbleEvent(item, currentPlaybackProgressPercent().toDouble())
+                event = playbackScrobbleEvent(item, currentPlaybackProgressPercent().toDouble())
             )
         }
     }
+}
+
+/** A scrobble event with the player's position and runtime, when the player knows them. */
+internal fun PlayerRuntimeController.playbackScrobbleEvent(
+    item: TrackingMediaReference,
+    progressPercent: Double
+): TrackingScrobbleEvent {
+    val duration = currentPlaybackDurationMs().takeIf { it > 0L } ?: lastKnownDuration.takeIf { it > 0L }
+    val position = currentPlaybackPositionMs()?.takeIf { it >= 0L && hasRenderedFirstFrame }
+    return TrackingScrobbleEvent(
+        media = item,
+        progressPercent = progressPercent,
+        positionMs = position?.let { if (duration != null) it.coerceAtMost(duration) else it },
+        durationMs = duration
+    )
 }
 
 internal fun PlayerRuntimeController.flushPlaybackSnapshotForSwitchOrExit() {

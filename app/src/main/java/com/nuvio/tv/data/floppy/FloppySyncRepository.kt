@@ -49,7 +49,8 @@ class FloppySyncRepository(
     private val activeProfileId: StateFlow<Int>,
     private val coroutineScope: CoroutineScope,
     private val now: () -> Long = System::currentTimeMillis,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val translator: FloppyEpisodeTranslator = FloppyEpisodeTranslator(auth, api)
 ) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val mutex = Mutex()
@@ -153,7 +154,7 @@ class FloppySyncRepository(
             checkScope(scope)
             val snapshot = loadCurrent() ?: return@withLock
             val playback = readPlayback(scope)
-            commit(scope, snapshot.copy(playback = playback))
+            commit(scope, withTrackerEpisodes(scope, snapshot.copy(playback = playback)))
         }
     }
 
@@ -172,7 +173,34 @@ class FloppySyncRepository(
             followChanges(scope, takeSnapshot(scope, snapshot))
         }
         val playback = readPlayback(scope)
-        commit(scope, snapshot.copy(playback = playback, checkedAtEpochMs = now()))
+        commit(scope, withTrackerEpisodes(scope, snapshot.copy(playback = playback, checkedAtEpochMs = now())))
+    }
+
+    /**
+     * Learns tracker numbering for episodes of IMDb-id shows that have no answer yet. A failed lookup
+     * leaves those episodes in Floppy's numbers until a later sync asks again; it never fails the sync.
+     */
+    private suspend fun withTrackerEpisodes(scope: FloppyAuthScope, snapshot: FloppySyncSnapshot): FloppySyncSnapshot {
+        val learned = LinkedHashMap<String, FloppyEpisodeCoords>()
+        try {
+            for ((show, coords) in FloppyProgressProjection.untranslatedEpisodes(snapshot)) {
+                val answers = translator.fromTmdb(scope, show.first, show.second, coords.toList())
+                for ((coord, answer) in answers) {
+                    val tracker = when (answer.status) {
+                        "translated" -> answer.tvdb
+                        "same" -> coord
+                        else -> null
+                    } ?: continue
+                    learned[trackerEpisodeKey(show.first, show.second, coord.season, coord.episode)] = tracker
+                }
+            }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // Keep whatever was learned so far; the rest is asked again on the next sync.
+        }
+        checkScope(scope)
+        return if (learned.isEmpty()) snapshot else snapshot.copy(trackerEpisodes = snapshot.trackerEpisodes + learned)
     }
 
     private suspend fun register(scope: FloppyAuthScope): String {

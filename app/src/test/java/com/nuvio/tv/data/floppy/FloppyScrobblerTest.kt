@@ -67,6 +67,52 @@ class FloppyScrobblerTest {
     }
 
     @Test
+    fun `pause sends position and duration in whole seconds so Floppy keeps a resume point`() = runTest {
+        val h = harness()
+
+        scrobbler(h).scrobble(
+            TrackingScrobbleAction.PAUSE,
+            TrackingScrobbleEvent(episode, 40.0, positionMs = 1_234_999L, durationMs = 3_087_500L)
+        )
+
+        val body = h.engine.requestsTo("/api/v1/scrobble/").single().body
+        assertEquals(1234L, body["position_seconds"]!!.jsonPrimitive.content.toLong())
+        assertEquals(3087L, body["duration_seconds"]!!.jsonPrimitive.content.toLong())
+    }
+
+    @Test
+    fun `unknown position and duration are left out`() = runTest {
+        val h = harness()
+
+        scrobbler(h).scrobble(TrackingScrobbleAction.START, TrackingScrobbleEvent(movie, 0.0, positionMs = null, durationMs = 0L))
+
+        val body = h.engine.requestsTo("/api/v1/scrobble/").single().body
+        assertNull(body["position_seconds"])
+        assertNull(body["duration_seconds"])
+    }
+
+    @Test
+    fun `position never runs past the duration`() = runTest {
+        val h = harness()
+
+        scrobbler(h).scrobble(
+            TrackingScrobbleAction.STOP,
+            TrackingScrobbleEvent(movie, 100.0, positionMs = 7_300_000L, durationMs = 7_200_000L)
+        )
+
+        val body = h.engine.requestsTo("/api/v1/scrobble/").single().body
+        assertEquals(7200L, body["position_seconds"]!!.jsonPrimitive.content.toLong())
+    }
+
+    @Test
+    fun `seeks are sent as a position update, never as a stop`() {
+        assertEquals(
+            com.nuvio.tv.core.tracking.TrackingSeekScrobblePolicy.POSITION_UPDATE,
+            scrobbler(harness()).seekScrobblePolicy
+        )
+    }
+
+    @Test
     fun `progress is clamped to the 0 to 100 range`() = runTest {
         val h = harness()
 

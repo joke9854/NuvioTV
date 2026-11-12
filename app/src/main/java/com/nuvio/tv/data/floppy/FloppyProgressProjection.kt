@@ -83,6 +83,14 @@ internal class FloppyProgressProjection private constructor(
             val watchedEpisodes = HashMap<String, MutableSet<Pair<Int, Int>>>()
             val latestPlay = HashMap<Triple<String, Int?, Int?>, Long>()
             val seedCandidates = ArrayList<Pair<WatchProgress, Resolved>>()
+            val tracker = snapshot.trackerEpisodes
+
+            /** Tracker numbering for an IMDb-id show when the server translated it; Floppy's numbers otherwise. */
+            fun numbered(contentId: String, source: String?, mediaId: String?, season: Int, episode: Int): Pair<Int, Int> {
+                if (source == null || mediaId == null || !isTrackerNumbered(contentId)) return season to episode
+                val mapped = tracker[trackerEpisodeKey(source, mediaId, season, episode)] ?: return season to episode
+                return mapped.season to mapped.episode
+            }
 
             fun addSiblings(resolved: Resolved) {
                 if (resolved.aliases.size > 1) resolved.aliases.forEach { siblings[it] = resolved.aliases }
@@ -103,11 +111,20 @@ internal class FloppyProgressProjection private constructor(
                             continue
                         }
                         val isMovie = item.type == "movie"
-                        val season = item.seasonNumber
-                        val episode = item.episodeNumber
+                        var season = item.seasonNumber
+                        var episode = item.episodeNumber
                         if (!isMovie && (season == null || episode == null)) {
                             unresolved++
                             continue
+                        }
+                        // Floppy's own (TMDB) numbers, kept for ids that are not tracker-numbered.
+                        val floppySeason = season
+                        val floppyEpisode = episode
+                        if (!isMovie) {
+                            numbered(resolved.contentId, item.source, item.mediaId, season!!, episode!!).let {
+                                season = it.first
+                                episode = it.second
+                            }
                         }
                         addSiblings(resolved)
                         val times = item.plays.mapNotNull { floppyInstantMillis(it.watchedAt) }
@@ -116,7 +133,8 @@ internal class FloppyProgressProjection private constructor(
                             watchedMovieIds += resolved.aliases
                         } else {
                             resolved.aliases.forEach { alias ->
-                                watchedEpisodes.getOrPut(alias) { linkedSetOf() } += season!! to episode!!
+                                val own = if (isTrackerNumbered(alias)) season!! to episode!! else floppySeason!! to floppyEpisode!!
+                                watchedEpisodes.getOrPut(alias) { linkedSetOf() } += own
                             }
                         }
                         // One watched event per play: a rewatch is a second event, never a merge.
@@ -154,9 +172,15 @@ internal class FloppyProgressProjection private constructor(
                     unresolved++
                     return@mapNotNull null
                 }
-                val season = entry.seasonNumber.takeUnless { isMovie }
-                val episode = entry.episodeNumber.takeUnless { isMovie }
+                var season = entry.seasonNumber.takeUnless { isMovie }
+                var episode = entry.episodeNumber.takeUnless { isMovie }
                 if (!isMovie && (season == null || episode == null)) return@mapNotNull null
+                if (!isMovie) {
+                    numbered(resolved.contentId, entry.source, entry.mediaId, season!!, episode!!).let {
+                        season = it.first
+                        episode = it.second
+                    }
+                }
                 if (resolved.aliases.any { it in hidden }) return@mapNotNull null
                 // The server's own time. Without one the position cannot be ordered and is left out.
                 val updated = floppyInstantMillis(entry.updatedAt) ?: return@mapNotNull null
@@ -196,6 +220,31 @@ internal class FloppyProgressProjection private constructor(
                 hiddenIds = hidden,
                 unresolvedCount = unresolved
             )
+        }
+
+        /**
+         * TMDB-order coordinates of tracker-numbered (IMDb-id) shows that [snapshot] has no answer for yet,
+         * grouped by the show's own Floppy source and media id.
+         */
+        fun untranslatedEpisodes(snapshot: FloppySyncSnapshot): Map<Pair<String, String>, Set<FloppyEpisodeCoords>> {
+            val resolver = Resolver(snapshot.items)
+            val wanted = LinkedHashMap<Pair<String, String>, MutableSet<FloppyEpisodeCoords>>()
+            fun consider(source: String?, mediaId: String?, ids: Map<String, String>, season: Int?, episode: Int?) {
+                if (source == null || mediaId == null || season == null || episode == null || season < 0 || episode < 1) return
+                val contentId = resolver.resolve("episode", source, mediaId, ids)?.contentId ?: return
+                if (!isTrackerNumbered(contentId)) return
+                if (trackerEpisodeKey(source, mediaId, season, episode) in snapshot.trackerEpisodes) return
+                wanted.getOrPut(source to mediaId) { linkedSetOf() } += FloppyEpisodeCoords(season, episode)
+            }
+            for (item in snapshot.items) {
+                if (item.type != "episode" || item.plays.isEmpty()) continue
+                consider(item.source, item.mediaId, item.ids, item.seasonNumber, item.episodeNumber)
+            }
+            for (entry in snapshot.playback) {
+                if (entry.completed || entry.mediaType != "episode") continue
+                consider(entry.source, entry.mediaId, entry.ids, entry.seasonNumber, entry.episodeNumber)
+            }
+            return wanted
         }
 
         private fun progressOf(

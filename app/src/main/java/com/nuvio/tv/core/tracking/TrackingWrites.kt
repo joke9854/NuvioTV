@@ -8,7 +8,10 @@ enum class TrackingScrobbleAction(val wireValue: String) {
 
 enum class TrackingSeekScrobblePolicy {
     NONE,
-    STOP_AND_RESTART
+    STOP_AND_RESTART,
+
+    /** After a seek the provider gets one START with the new position, and no STOP. */
+    POSITION_UPDATE
 }
 
 enum class TrackingListStatus(val wireValue: String) {
@@ -43,7 +46,11 @@ data class TrackingHistoryItem(
 
 data class TrackingScrobbleEvent(
     val media: TrackingMediaReference,
-    val progressPercent: Double
+    val progressPercent: Double,
+    /** Playback position when the player knows it; providers that store resume points use it. */
+    val positionMs: Long? = null,
+    /** Runtime of the stream when the player knows it. */
+    val durationMs: Long? = null
 )
 
 data class TrackingMutationResult(

@@ -73,8 +73,16 @@ data class FloppySyncSnapshot(
     val cursor: Long? = null,
     val items: List<FloppySyncItem> = emptyList(),
     val playback: List<FloppyPlayback> = emptyList(),
-    val checkedAtEpochMs: Long? = null
+    val checkedAtEpochMs: Long? = null,
+    /**
+     * Tracker (TVDB) numbering learned for episodes of IMDb-id shows, keyed by [trackerEpisodeKey] of
+     * the TMDB-order coordinates Floppy reports. Kept while the cursor advances.
+     */
+    val trackerEpisodes: Map<String, FloppyEpisodeCoords> = emptyMap()
 )
+
+internal fun trackerEpisodeKey(source: String, mediaId: String, season: Int, episode: Int): String =
+    "$source|$mediaId|$season|$episode"
 
 @Serializable
 internal data class FloppyConnectionResponse(val connection: String? = null)

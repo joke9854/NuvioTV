@@ -51,6 +51,15 @@ class TrackingScrobbleCoordinator @Inject constructor(
         event = event
     )
 
+    /** Tells position-update providers where playback is after a seek; one START, never a STOP. */
+    suspend fun scrobblePositionUpdate(event: TrackingScrobbleEvent): List<TrackingScrobbleFailure> =
+        dispatchTrackingScrobble(
+            scrobblers = providerRegistry.connectedScrobblers()
+                .filter { it.seekScrobblePolicy == TrackingSeekScrobblePolicy.POSITION_UPDATE },
+            action = TrackingScrobbleAction.START,
+            event = event
+        ).also { failures -> failures.log(TrackingScrobbleAction.START, true) }
+
     private suspend fun dispatch(
         scrobblers: Collection<TrackingScrobbler>,
         action: TrackingScrobbleAction,

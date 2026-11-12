@@ -9,6 +9,7 @@ import com.nuvio.tv.data.floppy.FloppyApiClient
 import com.nuvio.tv.data.floppy.FloppyAuthRepository
 import com.nuvio.tv.data.floppy.FloppyAuthStore
 import com.nuvio.tv.data.floppy.AndroidFloppySyncStorage
+import com.nuvio.tv.data.floppy.FloppyEpisodeTranslator
 import com.nuvio.tv.data.floppy.FloppyHttpClient
 import com.nuvio.tv.data.floppy.FloppySyncRepository
 import com.nuvio.tv.data.floppy.OkHttpFloppyEngine
@@ -71,9 +72,11 @@ object FloppyModule {
         storage: AndroidFloppySyncStorage,
         store: FloppyAuthStore,
         api: FloppyApiClient,
-        profiles: ProfileManager
+        profiles: ProfileManager,
+        translator: FloppyEpisodeTranslator
     ) = FloppySyncRepository(
         storage, store, api, profiles.activeProfileId,
-        CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        translator = translator
     )
 }
