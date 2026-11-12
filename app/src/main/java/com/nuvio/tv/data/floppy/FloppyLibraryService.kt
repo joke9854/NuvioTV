@@ -96,7 +96,9 @@ internal data class FloppyLibraryRow(
     val source: String?,
     val mediaId: String?,
     val status: String,
-    val listedAt: Long
+    val listedAt: Long,
+    /** Poster URL from Floppy (or, until the next sync, the one Nuvio had when the title was added). */
+    val poster: String? = null
 ) {
     val tmdbId: Int? get() = aliases.firstOrNull { it.startsWith("tmdb:") }?.substringAfter(':')?.toIntOrNull()
     val imdbId: String? get() = aliases.firstOrNull { it.startsWith("tt", ignoreCase = true) }
@@ -128,7 +130,8 @@ internal fun floppyLibraryRows(snapshot: FloppySyncSnapshot?): List<FloppyLibrar
                 source = item.source,
                 mediaId = item.mediaId,
                 status = item.status!!,
-                listedAt = item.plays.mapNotNull { floppyInstantMillis(it.watchedAt) }.maxOrNull() ?: 0L
+                listedAt = item.plays.mapNotNull { floppyInstantMillis(it.watchedAt) }.maxOrNull() ?: 0L,
+                poster = floppyPosterUrl(item.image)
             )
         }
         .distinctBy { it.type to it.contentId }
@@ -162,7 +165,7 @@ private fun FloppyLibraryRow.toLibraryEntry(): LibraryEntry {
         id = contentId,
         type = type,
         name = title ?: contentId,
-        poster = null,
+        poster = poster,
         posterShape = PosterShape.POSTER,
         background = null,
         logo = null,
@@ -175,10 +178,15 @@ private fun FloppyLibraryRow.toLibraryEntry(): LibraryEntry {
         listedAt = listedAt,
         imdbId = imdbId,
         tmdbId = tmdbId,
-        rawPosterUrl = null,
+        rawPosterUrl = poster,
         trackingProviderId = TrackingProviderId.FLOPPY.storageId,
         trackingProviderItemId = source?.let { "floppy:$it:$mediaId" }
     )
+}
+
+/** A usable poster URL: http(s) only, anything else (blank, a relative path) is dropped. */
+internal fun floppyPosterUrl(value: String?): String? = value?.trim()?.takeIf {
+    it.startsWith("https://", ignoreCase = true) || it.startsWith("http://", ignoreCase = true)
 }
 
 /** Floppy refused to remove a title because it has watch history. Floppy never deletes history. */
@@ -309,7 +317,8 @@ class FloppyLibraryService internal constructor(
         // Show the change at once; the INVALIDATED refresh then brings the snapshot up to date.
         val base = current ?: FloppyLibraryRow(
             contentId = item.itemId, aliases = aliases, type = type, title = item.title.takeIf(String::isNotBlank),
-            ids = emptyMap(), source = null, mediaId = null, status = "", listedAt = 0L
+            ids = emptyMap(), source = null, mediaId = null, status = "", listedAt = 0L,
+            poster = floppyPosterUrl(item.poster)
         )
         val overlay = FloppyLibraryOverlay(type, aliases + base.aliases, desired?.let { base.copy(status = it.wire) }, now())
         overlays.update { it + overlay }

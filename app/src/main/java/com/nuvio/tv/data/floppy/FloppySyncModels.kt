@@ -34,6 +34,8 @@ data class FloppySyncItem(
     @SerialName("season_number") val seasonNumber: Int? = null,
     @SerialName("episode_number") val episodeNumber: Int? = null,
     val ids: Map<String, String> = emptyMap(),
+    /** Movies and shows: the poster Floppy shows (capability sync_items_image_v1); null otherwise or on older servers. */
+    val image: String? = null,
     @SerialName("in_library") val inLibrary: Boolean = true,
     val status: String? = null,
     val plays: List<FloppySyncPlay> = emptyList()

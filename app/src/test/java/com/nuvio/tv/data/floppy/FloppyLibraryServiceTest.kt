@@ -41,8 +41,10 @@ private fun libraryItem(
     inLibrary: Boolean = true,
     season: Int? = null,
     episode: Int? = null,
-    title: String = "Title $mediaId"
+    title: String = "Title $mediaId",
+    image: String? = null
 ) = """{"type":"$type","source":"tmdb","media_id":"$mediaId","title":"$title","season_number":${season ?: "null"},""" +
+    """"image":${image?.let { "\"$it\"" } ?: "null"},""" +
     """"episode_number":${episode ?: "null"},"ids":$ids,"in_library":$inLibrary,"status":${status?.let { "\"$it\"" } ?: "null"},""" +
     """"plays":[]}"""
 
@@ -181,6 +183,32 @@ class FloppyLibraryServiceTest {
         // The change is visible at once, even though the refreshed snapshot still says planning.
         assertEquals(setOf("floppy:status:dropped"), f.service.observeMembership("tt20", "series").first())
         assertTrue(f.service.getMembershipSnapshot(show("tt20")).listMembership.getValue("floppy:status:dropped"))
+    }
+
+    @Test
+    fun `posters come from the snapshot and only http urls are used`() = runTest {
+        val f = fixture()
+        f.items = listOf(
+            libraryItem("movie", "40", "planning", ids = """{"imdb":"tt40"}""", image = "https://image.tmdb.org/t/p/w500/a.jpg"),
+            libraryItem("movie", "41", "planning", ids = """{"imdb":"tt41"}"""),
+            libraryItem("movie", "42", "planning", ids = """{"imdb":"tt42"}""", image = "/relative.jpg")
+        )
+        f.sync()
+        val posters = f.service.items.first().associate { it.id to it.poster }
+        assertEquals("https://image.tmdb.org/t/p/w500/a.jpg", posters["tt40"])
+        assertEquals(null, posters["tt41"])
+        assertEquals(null, posters["tt42"])
+    }
+
+    @Test
+    fun `a title added from Nuvio keeps Nuvio's poster until the snapshot has one`() = runTest {
+        val f = fixture()
+        f.sync()
+        f.service.applyMembershipChanges(
+            LibraryEntryInput(itemId = "tt31", itemType = "movie", title = "T", poster = "https://example.org/p.jpg"),
+            desire("floppy:status:plantowatch")
+        )
+        assertEquals("https://example.org/p.jpg", f.service.items.first().single { it.id == "tt31" }.poster)
     }
 
     @Test
