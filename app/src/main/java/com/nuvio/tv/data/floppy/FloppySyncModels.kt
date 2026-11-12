@@ -37,6 +37,8 @@ data class FloppySyncItem(
     /** Movies and shows: the poster Floppy shows (capability sync_items_image_v1); null otherwise or on older servers. */
     val image: String? = null,
     @SerialName("in_library") val inLibrary: Boolean = true,
+    /** Movies and shows: when the title was first added (capability sync_items_added_at_v1); null otherwise or on older servers. */
+    @SerialName("added_at") val addedAt: String? = null,
     val status: String? = null,
     val plays: List<FloppySyncPlay> = emptyList()
 ) {

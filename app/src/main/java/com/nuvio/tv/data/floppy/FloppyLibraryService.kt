@@ -130,7 +130,10 @@ internal fun floppyLibraryRows(snapshot: FloppySyncSnapshot?): List<FloppyLibrar
                 source = item.source,
                 mediaId = item.mediaId,
                 status = item.status!!,
-                listedAt = item.plays.mapNotNull { floppyInstantMillis(it.watchedAt) }.maxOrNull() ?: 0L,
+                // "Date added" sorts by when the title was added; older servers send no added_at,
+                // so the latest play stands in there.
+                listedAt = floppyInstantMillis(item.addedAt)
+                    ?: item.plays.mapNotNull { floppyInstantMillis(it.watchedAt) }.maxOrNull() ?: 0L,
                 poster = floppyPosterUrl(item.image)
             )
         }
@@ -324,7 +327,7 @@ class FloppyLibraryService internal constructor(
         // Show the change at once; the INVALIDATED refresh then brings the snapshot up to date.
         val base = current ?: FloppyLibraryRow(
             contentId = item.itemId, aliases = aliases, type = type, title = item.title.takeIf(String::isNotBlank),
-            ids = emptyMap(), source = null, mediaId = null, status = "", listedAt = 0L,
+            ids = emptyMap(), source = null, mediaId = null, status = "", listedAt = now(),
             poster = floppyPosterUrl(item.poster)
         )
         val overlay = FloppyLibraryOverlay(type, aliases + base.aliases, desired?.let { base.copy(status = it.wire) }, now())

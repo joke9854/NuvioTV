@@ -42,9 +42,10 @@ private fun libraryItem(
     season: Int? = null,
     episode: Int? = null,
     title: String = "Title $mediaId",
-    image: String? = null
+    image: String? = null,
+    addedAt: String? = null
 ) = """{"type":"$type","source":"tmdb","media_id":"$mediaId","title":"$title","season_number":${season ?: "null"},""" +
-    """"image":${image?.let { "\"$it\"" } ?: "null"},""" +
+    """"image":${image?.let { "\"$it\"" } ?: "null"},"added_at":${addedAt?.let { "\"$it\"" } ?: "null"},""" +
     """"episode_number":${episode ?: "null"},"ids":$ids,"in_library":$inLibrary,"status":${status?.let { "\"$it\"" } ?: "null"},""" +
     """"plays":[]}"""
 
@@ -198,6 +199,24 @@ class FloppyLibraryServiceTest {
         assertEquals("https://image.tmdb.org/t/p/w342/a.jpg", posters["tt40"])
         assertEquals(null, posters["tt41"])
         assertEquals(null, posters["tt42"])
+    }
+
+    @Test
+    fun `date added comes from added_at, newest first, and a title added from Nuvio goes on top`() = runTest {
+        val f = fixture()
+        f.items = listOf(
+            libraryItem("movie", "50", "planning", ids = """{"imdb":"tt50"}""", addedAt = "1970-01-01T00:05:00.123456Z"),
+            libraryItem("movie", "51", "planning", ids = """{"imdb":"tt51"}""", addedAt = "1970-01-01T00:10:00Z"),
+            libraryItem("movie", "52", "planning", ids = """{"imdb":"tt52"}""")
+        )
+        f.sync()
+        val entries = f.service.items.first()
+        assertEquals(listOf("tt51", "tt50", "tt52"), entries.map { it.id })
+        assertEquals(java.time.Instant.parse("1970-01-01T00:05:00.123Z").toEpochMilli(), entries.single { it.id == "tt50" }.listedAt)
+
+        // The harness clock (00:16:40 UTC on 1970-01-01) is later than both added_at values.
+        f.service.applyMembershipChanges(LibraryEntryInput(itemId = "tt53", itemType = "movie", title = "New"), desire("floppy:status:plantowatch"))
+        assertEquals("tt53", f.service.items.first().first().id)
     }
 
     @Test
