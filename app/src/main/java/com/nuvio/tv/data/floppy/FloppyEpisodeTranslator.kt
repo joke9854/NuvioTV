@@ -67,8 +67,7 @@ class FloppyEpisodeTranslator internal constructor(
     private val lock = Any()
     private var cacheScope: FloppyAuthScope? = null
     private val cache = HashMap<CacheKey, FloppyEpisodeTranslation>()
-    private var capable: Boolean? = null
-    private var capableAt = 0L
+    private val capabilities = HashMap<String, Pair<Boolean, Long>>()
 
     /**
      * Writes: [medias] with the episode coordinates of tracker-numbered shows replaced by Floppy's (TMDB)
@@ -131,7 +130,7 @@ class FloppyEpisodeTranslator internal constructor(
                 if (hit != null) answers[coord] = hit else missing += coord
             }
         }
-        if (missing.isEmpty() || !isCapable(scope)) return answers
+        if (missing.isEmpty() || !hasExtension(scope, "cinetrack_episode_translate_v1")) return answers
         for (batch in missing.chunked(TRANSLATE_BATCH_SIZE)) {
             val fetched = fetch(scope, source, mediaId, direction, batch) ?: continue
             synchronized(lock) {
@@ -194,15 +193,17 @@ class FloppyEpisodeTranslator internal constructor(
         return FloppyEpisodeCoords(season, episode)
     }
 
-    private suspend fun isCapable(scope: FloppyAuthScope): Boolean {
+    /** True when `/api/v1/info/` advertises [name] under `api_extensions`. Cached per extension for ten minutes; a failed read is false and not cached. */
+    internal suspend fun hasExtension(scope: FloppyAuthScope, name: String): Boolean {
         synchronized(lock) {
-            val known = capable
-            if (known != null && now() - capableAt in 0 until CAPABILITY_TTL_MS) return known
+            resetIfScopeChanged(scope)
+            val known = capabilities[name]
+            if (known != null && now() - known.second in 0 until CAPABILITY_TTL_MS) return known.first
         }
         val value = try {
             val response = api.get(scope, "/api/v1/info/")
             json.parseToJsonElement(response.body).jsonObject["api_extensions"]?.jsonObject
-                ?.get("cinetrack_episode_translate_v1")?.jsonPrimitive?.contentOrNull == "true"
+                ?.get(name)?.jsonPrimitive?.contentOrNull == "true"
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
@@ -210,8 +211,7 @@ class FloppyEpisodeTranslator internal constructor(
         }
         synchronized(lock) {
             if (cacheScope == scope) {
-                capable = value
-                capableAt = now()
+                capabilities[name] = value to now()
             }
         }
         return value
@@ -221,7 +221,7 @@ class FloppyEpisodeTranslator internal constructor(
         if (cacheScope == scope) return
         cacheScope = scope
         cache.clear()
-        capable = null
+        capabilities.clear()
     }
 
     private fun encode(value: String) = URLEncoder.encode(value, "UTF-8").replace("+", "%20")

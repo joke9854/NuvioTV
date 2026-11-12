@@ -14,7 +14,7 @@ import org.junit.Test
 class TrackingLibrarySourceControllerTest {
     @Test
     fun `each library source refreshes its registered provider after selection`() = runTest {
-        for (mode in listOf(LibrarySourceMode.TRAKT, LibrarySourceMode.SIMKL, LibrarySourceMode.MDBLIST)) {
+        for (mode in listOf(LibrarySourceMode.TRAKT, LibrarySourceMode.SIMKL, LibrarySourceMode.MDBLIST, LibrarySourceMode.FLOPPY)) {
             val settings = mockk<TraktSettingsDataStore>(relaxed = true)
             coEvery { settings.getLibrarySourceMode(1) } returns LibrarySourceMode.LOCAL
             val provider = mockk<TrackingLibraryProvider>(relaxed = true) { every { providerId } returns requireNotNull(mode.providerId) }

@@ -3,8 +3,6 @@ package com.nuvio.tv.ui.screens.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Dns
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,8 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -34,7 +31,7 @@ internal fun FloppyAccountDialog(
     onDisconnect: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val logo = rememberVectorPainter(Icons.Default.Dns)
+    val logo = painterResource(R.drawable.floppy_logo)
     if (state.isConnected) {
         NuvioDialog(
             onDismiss = onDismiss,
@@ -121,7 +118,6 @@ internal fun FloppyAccountDialog(
                 logo = logo,
                 logoContentDescription = stringResource(R.string.floppy_name),
                 logoLabel = stringResource(R.string.floppy_name),
-                logoTint = Color.White,
                 qrContentDescription = stringResource(R.string.floppy_qr_description),
                 instruction = stringResource(R.string.floppy_awaiting_instruction),
                 userCode = state.session?.userCode,

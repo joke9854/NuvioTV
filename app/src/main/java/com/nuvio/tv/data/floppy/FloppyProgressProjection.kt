@@ -34,9 +34,9 @@ internal class FloppyProgressProjection private constructor(
     fun episodeProgress(contentId: String): Map<Pair<Int, Int>, WatchProgress> =
         episodeProgressById[contentId].orEmpty().associateBy { it.season!! to it.episode!! }
 
-    private class Resolved(val contentId: String, val aliases: Set<String>)
+    internal class Resolved(val contentId: String, val aliases: Set<String>)
 
-    private class Resolver(items: List<FloppySyncItem>) {
+    internal class Resolver(items: List<FloppySyncItem>) {
         /** Ids of movies and shows only; an episode's own ids are used only when its show is unknown. */
         private val known = HashMap<String, Map<String, String>>()
         private val showTitles = HashMap<String, String>()

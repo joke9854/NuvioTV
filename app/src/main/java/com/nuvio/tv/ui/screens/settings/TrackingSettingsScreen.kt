@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Dns
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -603,7 +602,7 @@ internal fun TrackingSettingsOverview(
                             subtitle = floppyPresentation.subtitle,
                             value = floppyPresentation.value,
                             valueColor = floppyPresentation.color,
-                            leadingIcon = Icons.Default.Dns,
+                            leadingDrawableRes = R.drawable.floppy_logo,
                             leadingArtworkSize = 40.dp,
                             onClick = onFloppyClick,
                             modifier = Modifier
@@ -842,6 +841,7 @@ private fun librarySourceLabel(mode: LibrarySourceMode): String = when (mode) {
     LibrarySourceMode.TRAKT -> stringResource(R.string.trakt_name)
     LibrarySourceMode.SIMKL -> stringResource(R.string.simkl_name)
     LibrarySourceMode.MDBLIST -> stringResource(R.string.mdblist_name)
+    LibrarySourceMode.FLOPPY -> stringResource(R.string.floppy_name)
     LibrarySourceMode.LOCAL -> stringResource(R.string.trakt_library_source_nuvio)
 }
 

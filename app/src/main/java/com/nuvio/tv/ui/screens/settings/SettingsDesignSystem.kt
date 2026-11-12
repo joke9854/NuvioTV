@@ -2,9 +2,11 @@
 
 package com.nuvio.tv.ui.screens.settings
 
+import androidx.compose.ui.res.painterResource
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 import androidx.annotation.RawRes
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -838,6 +840,7 @@ internal fun SettingsActionRow(
     titleTrailingIconTint: Color = NuvioTheme.colors.TextPrimary,
     leadingIcon: ImageVector? = null,
     @RawRes leadingRawIconRes: Int? = null,
+    @DrawableRes leadingDrawableRes: Int? = null,
     leadingArtworkSize: Dp = NuvioTheme.spacing.xl,
     valueColor: Color = NuvioTheme.colors.TextSecondary
 ) {
@@ -879,6 +882,18 @@ internal fun SettingsActionRow(
                     contentDescription = null,
                     modifier = Modifier
                         .size(leadingArtworkSize)
+                        .alpha(contentAlpha),
+                    contentScale = ContentScale.Fit
+                )
+                Spacer(modifier = Modifier.width(NuvioTheme.spacing.lg))
+            } else if (leadingDrawableRes != null) {
+                // A bitmap logo (e.g. a provider app icon) where no SVG exists.
+                Image(
+                    painter = painterResource(leadingDrawableRes),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(leadingArtworkSize)
+                        .clip(RoundedCornerShape(leadingArtworkSize * 0.22f))
                         .alpha(contentAlpha),
                     contentScale = ContentScale.Fit
                 )

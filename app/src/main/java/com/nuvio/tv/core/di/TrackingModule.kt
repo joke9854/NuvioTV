@@ -22,6 +22,7 @@ import com.nuvio.tv.core.profile.ProfileScopedCredentialStore
 import com.nuvio.tv.data.mdblist.MdbListTrackingHistoryWriter
 import com.nuvio.tv.data.mdblist.MdbListTrackingProgressProvider
 import com.nuvio.tv.data.mdblist.MdbListTrackingProvider
+import com.nuvio.tv.data.floppy.FloppyLibraryService
 import com.nuvio.tv.data.floppy.FloppyTrackingHistoryWriter
 import com.nuvio.tv.data.floppy.FloppyTrackingProgressProvider
 import com.nuvio.tv.data.floppy.FloppyTrackingProvider
@@ -50,6 +51,10 @@ abstract class TrackingModule {
     @Binds
     @IntoSet
     abstract fun bindMdbListHistory(writer: MdbListTrackingHistoryWriter): TrackingHistoryWriter
+
+    @Binds
+    @IntoSet
+    abstract fun bindFloppyLibrary(provider: FloppyLibraryService): TrackingLibraryProvider
 
     @Binds
     @IntoSet

@@ -40,10 +40,17 @@ class TrackingSourcesTest {
             listOf(WatchProgressSource.NUVIO_SYNC),
             availableWatchProgressSources(emptySet())
         )
-        // Floppy is not a library source yet.
+        // Floppy is also a library source (status tabs) while it is connected.
+        assertEquals(TrackingProviderId.FLOPPY, LibrarySourceMode.FLOPPY.providerId)
+        assertEquals(LibrarySourceMode.FLOPPY, LibrarySourceMode.valueOf("FLOPPY"))
         assertEquals(
-            listOf(LibrarySourceMode.LOCAL),
+            listOf(LibrarySourceMode.LOCAL, LibrarySourceMode.FLOPPY),
             availableLibrarySourceModes(setOf(TrackingProviderId.FLOPPY))
+        )
+        assertEquals(LibrarySourceMode.LOCAL, effectiveLibrarySourceMode(LibrarySourceMode.FLOPPY) { false })
+        assertEquals(
+            LibrarySourceMode.FLOPPY,
+            effectiveLibrarySourceMode(LibrarySourceMode.FLOPPY) { it == TrackingProviderId.FLOPPY }
         )
         assertEquals(
             WatchProgressSource.FLOPPY,

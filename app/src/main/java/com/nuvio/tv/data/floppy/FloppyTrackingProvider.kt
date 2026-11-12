@@ -58,6 +58,8 @@ class FloppyTrackingProvider @Inject constructor(
             TrackingCapability.WATCHED_WRITE,
             TrackingCapability.PROGRESS_READ,
             TrackingCapability.PROGRESS_WRITE,
+            TrackingCapability.LIBRARY_READ,
+            TrackingCapability.LIBRARY_WRITE,
             TrackingCapability.SCROBBLE
         )
     )
